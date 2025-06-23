@@ -3,6 +3,7 @@ import tomllib
 import math
 import logging
 from typing import Dict
+import os
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -20,7 +21,7 @@ logging.basicConfig(
     filename="gastank.log",
     filemode="a",  # append to the log file
     format="%(asctime)s %(levelname)s %(message)s",
-    level=logging.INFO
+    level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,8 @@ class EIP3009Body(BaseModel):
 
 
 # ────────────────────────────── FastAPI app ──
-app = FastAPI(title="EIP-3009 Relayer")
+ROOT_PATH = os.getenv("ROOT_PATH", "")  # e.g. set to "/api/gasless" in production
+app = FastAPI(title="EIP-3009 Relayer", root_path=ROOT_PATH)
 
 
 @app.post("/relay3009")
@@ -207,4 +209,4 @@ async def relay(body: EIP3009Body):
 
 if __name__ == "__main__":
     logger.info("Starting EIP-3009 Relayer FastAPI server")
-    uvicorn.run("main:app", host="0.0.0.0", port=8459)
+    uvicorn.run("main:app", host="0.0.0.0", port=8459, root_path=ROOT_PATH)
