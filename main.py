@@ -93,12 +93,16 @@ class EIP3009Body(BaseModel):
     s: HexStr
 
 
+class RelayResponse(BaseModel):
+    tx_hash: HexStr = Field(..., alias="txHash")
+
+
 # ────────────────────────────── FastAPI app ──
 ROOT_PATH = os.getenv("ROOT_PATH", "")  # e.g. set to "/api/gasless" in production
 app = FastAPI(title="EIP-3009 Relayer", root_path=ROOT_PATH)
 
 
-@app.post("/relay3009")
+@app.post("/relay3009", response_model=RelayResponse)
 async def relay(body: EIP3009Body):
     # Log the incoming request
     logger.info(
