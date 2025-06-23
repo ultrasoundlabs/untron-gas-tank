@@ -5,5 +5,5 @@ private_key = "0x..."
 chain_id = 1
 rpc_url = "https://rpc.ankr.com/eth"
 allowed_tokens = [
-    "..."
+    { address = "0x…", min_transfer = 1000000000000000000 }, # 1 token with 18 decimals
 ]

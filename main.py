@@ -2,7 +2,7 @@ import json
 import tomllib
 import math
 import logging
-from typing import Dict
+from typing import Dict, Optional
 import os
 
 from fastapi import FastAPI, HTTPException
@@ -37,8 +37,23 @@ CHAIN_MAP: Dict[int, Dict] = {c["chain_id"]: c for c in cfg["chains"]}
 
 # ────────────────────────────── helpers ──────
 def allowed_token(chain_id: int, token: str) -> bool:
-    token = token.lower()
-    return token in [t.lower() for t in CHAIN_MAP[chain_id]["allowed_tokens"]]
+    """Return True if *token* is present in the allow-list for *chain_id*."""
+    return get_token_cfg(chain_id, token) is not None
+
+
+def get_token_cfg(chain_id: int, token: str) -> Optional[Dict]:
+    """Return the configuration object for *token* on *chain_id* or *None* if the
+    token is not allow-listed. Token comparison is case-insensitive.
+    The returned dict is expected to contain the keys:
+
+    • address – the checksum (or lower-case) address of the ERC-20 token
+    • min_transfer – the minimum transfer amount that will be accepted by the relayer
+    """
+    token_lower = token.lower()
+    for t in CHAIN_MAP[chain_id]["allowed_tokens"]:
+        if t["address"].lower() == token_lower:
+            return t
+    return None
 
 
 async def verify_recipient_is_allowed(recipient: str) -> bool:
@@ -84,7 +99,10 @@ class EIP3009Body(BaseModel):
     token_address: str = Field(..., alias="token")
     from_addr: str = Field(..., alias="from")
     to_addr: str = Field(..., alias="to")
-    value: int
+    value: int = Field(
+        ...,
+        description="Amount of tokens to transfer (must be greater than or equal to the token-specific minimum; normally 2(000_000) for USDC and USDT).",
+    )
     valid_after: int = Field(..., alias="validAfter")
     valid_before: int = Field(..., alias="validBefore")
     nonce: str
@@ -117,9 +135,22 @@ async def relay(body: EIP3009Body):
         raise HTTPException(400, f"Unsupported chain {body.chain_id}")
 
     token = to_checksum_address(body.token_address)
-    if not allowed_token(body.chain_id, token):
+
+    # Retrieve the token configuration in one go (includes min_transfer)
+    token_cfg = get_token_cfg(body.chain_id, token)
+    if token_cfg is None:
         logger.warning(f"Token {token} not allowed on chain {body.chain_id}")
         raise HTTPException(400, "Token not allowed on this chain")
+
+    min_transfer = int(token_cfg.get("min_transfer", 0))
+    if body.value < min_transfer:
+        logger.warning(
+            f"Transfer value {body.value} below minimum {min_transfer} for token {token} on chain {body.chain_id}"
+        )
+        raise HTTPException(
+            400,
+            f"Transfer value below minimum allowed: must be at least {min_transfer}",
+        )
 
     if not await verify_recipient_is_allowed(body.to_addr):
         logger.warning(f"Recipient {body.to_addr} not allowed")
