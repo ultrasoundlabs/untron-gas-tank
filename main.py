@@ -13,6 +13,7 @@ from eth_utils import to_checksum_address
 import uvicorn
 from web3 import AsyncHTTPProvider, AsyncWeb3
 from web3.middleware import ExtraDataToPOAMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 # ────────────────────────────── logging setup ─
 # We set up logging to write logs to gastank.log file.
@@ -118,6 +119,20 @@ class RelayResponse(BaseModel):
 # ────────────────────────────── FastAPI app ──
 ROOT_PATH = os.getenv("ROOT_PATH", "")  # e.g. set to "/api/gasless" in production
 app = FastAPI(title="EIP-3009 Relayer", root_path=ROOT_PATH)
+
+# ──────────────────────── CORS setup ────
+# We enable highly permissive CORS so that any web client can interact with this
+# relayer API without being blocked by the browser's same-origin policy.  In a
+# production environment you would typically restrict *allow_origins* (and
+# potentially methods/headers) to a specific list of trusted web front-ends,
+# but for ease of integration during development we open it up completely.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Accept requests from any origin
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers including Authorization
+)
 
 
 @app.post("/relay3009", response_model=RelayResponse)
